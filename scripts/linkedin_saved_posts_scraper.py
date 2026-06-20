@@ -20,6 +20,7 @@ import time
 import webbrowser  # Added for opening HTML page
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs, unquote
 
 try:
     from dotenv import load_dotenv
@@ -85,6 +86,67 @@ def sanitize_filename(text: str, max_length: int = 80) -> str:
     safe = re.sub(r'[^\w\s-]', '', text)
     safe = re.sub(r'[-\s]+', '-', safe).strip('-')
     return safe[:max_length] if safe else 'untitled'
+
+
+def normalize_link(href: str) -> str:
+    """Resolve relative URLs and unwrap LinkedIn safety-redirect wrappers."""
+    if not href:
+        return ""
+    href = href.strip()
+    if href.startswith("//"):
+        href = "https:" + href
+    elif href.startswith("/"):
+        href = "https://www.linkedin.com" + href
+    if not href.startswith("http"):
+        return ""
+    # Unwrap LinkedIn redirect links: /redir/redirect?url=<encoded target>
+    parsed = urlparse(href)
+    if "linkedin.com" in parsed.netloc and parsed.path.startswith("/redir/"):
+        target = parse_qs(parsed.query).get("url", [""])[0]
+        if target:
+            href = unquote(target)
+    return href
+
+
+def is_internal_link(url: str) -> bool:
+    """True for LinkedIn navigation links (profiles, feed, hashtags, etc.)."""
+    return bool(re.search(
+        r"linkedin\.com/(in/|feed/|company/|school/|posts/|search/|"
+        r"mynetwork|jobs/|groups/|notifications|messaging|my-items)",
+        url,
+    ))
+
+
+def extract_links(post_el, body: str, author_url: str, post_url: str) -> list[str]:
+    """Collect external/shared links referenced inside a post.
+
+    Pulls URLs from anchor tags (unwrapping LinkedIn redirects) and from
+    plain-text URLs / lnkd.in short links in the post body. Skips LinkedIn
+    navigation links and the post's own author/permalink metadata.
+    """
+    links = []
+    seen = set()
+    skip = {u.rstrip("/") for u in (author_url, post_url) if u}
+
+    def add(raw: str):
+        url = normalize_link(raw)
+        if not url or is_internal_link(url):
+            return
+        key = url.rstrip("/")
+        if key in skip or key in seen:
+            return
+        seen.add(key)
+        links.append(url)
+
+    # Anchor tags within the post element
+    for anchor in post_el.query_selector_all("a[href]"):
+        add(anchor.get_attribute("href") or "")
+
+    # Plain-text URLs and lnkd.in short links in the post body
+    for match in re.findall(r"https?://[^\s)]+|lnkd\.in/\S+", body or ""):
+        add(match if match.startswith("http") else f"https://{match}")
+
+    return links
 
 
 def extract_posts(page) -> list[dict]:
@@ -213,6 +275,8 @@ def extract_posts(page) -> list[dict]:
                 timestamp = re.sub(r'[•·].*$', '', timestamp).strip()
                 timestamp = timestamp.split('\n')[0].strip()
             
+            links = extract_links(post_el, body, author_url, post_url)
+
             if body or author != "Unknown Author":
                 posts.append({
                     "author": author,
@@ -221,9 +285,11 @@ def extract_posts(page) -> list[dict]:
                     "body": body,
                     "url": post_url,
                     "timestamp": timestamp,
+                    "links": links,
                     "index": i + 1
                 })
-                print(f"  Extracted post {i + 1}: {author[:30]}...")
+                link_note = f" ({len(links)} link(s))" if links else ""
+                print(f"  Extracted post {i + 1}: {author[:30]}...{link_note}")
                 
         except Exception as e:
             print(f"  Error extracting post {i + 1}: {e}")
@@ -261,7 +327,12 @@ Post Link: {post['url']}
 >
 > {post['body'].replace(chr(10), chr(10) + "> ") if post['body'] else "*No text content available*"}
 """
-        
+
+        links = post.get('links', [])
+        if links:
+            md_content += "\n## Links\n\n"
+            md_content += "".join(f"- {link}\n" for link in links)
+
         filepath.write_text(md_content, encoding='utf-8')
         print(f"Created: {filepath}")
     
@@ -284,7 +355,29 @@ Total posts: {len(posts)}
     index_path = output_path / "README.md"
     index_path.write_text(index_content, encoding='utf-8')
     print(f"\nCreated index: {index_path}")
-    
+
+    # Create a consolidated list of every link found across all posts
+    total_links = sum(len(post.get('links', [])) for post in posts)
+    links_content = f"""# Links from LinkedIn Saved Posts
+
+Exported on: {now.strftime("%Y-%m-%d %H:%M:%S")}
+
+Total links: {total_links}
+
+"""
+    for post in posts:
+        post_links = post.get('links', [])
+        if not post_links:
+            continue
+        links_content += f"## {post['index']:03d} - {post['author']}\n\n"
+        for link in post_links:
+            links_content += f"- {link}\n"
+        links_content += "\n"
+
+    links_path = output_path / "links.md"
+    links_path.write_text(links_content, encoding='utf-8')
+    print(f"Created links file: {links_path} ({total_links} links)")
+
     return output_path
 
 

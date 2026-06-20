@@ -26,20 +26,36 @@ python linkedin_saved_posts_scraper.py
 2. If not logged in, you'll need to log in manually
 3. The script waits for you to complete login
 4. It scrolls through your saved posts to load them all
-5. Extracts author names and post content
-6. Creates a folder `linkedin_saved_posts/` with:
-   - Individual `.md` files for each post
+5. Extracts author names, post content, and any links shared in each post
+6. Creates a folder `saved_posts/` with:
+   - Individual `.md` files for each post (including a `## Links` section)
    - A `README.md` index file
+   - A `links.md` file listing every link found across all posts
 
 ## Output Structure
 
 \`\`\`
-linkedin_saved_posts/
+saved_posts/
 ├── README.md              # Index of all posts
+├── links.md               # All links extracted from every post
 ├── 001-John-Doe.md        # Individual post files
 ├── 002-Jane-Smith.md
 └── ...
 \`\`\`
+
+## Links
+
+Each post often shares external articles, tools, or resources. The scraper
+collects these from:
+
+- Anchor tags in the post (unwrapping LinkedIn `/redir/` safety-redirects)
+- `lnkd.in` short links
+- Plain-text URLs in the post body
+
+LinkedIn navigation links (profiles, hashtags, the post's own permalink) are
+filtered out. Extracted links appear in each post's `## Links` section, in the
+consolidated `links.md`, and in the HTML viewer (link count on each card plus a
+clickable list in the post modal).
 
 ## Notes
 

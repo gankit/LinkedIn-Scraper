@@ -235,6 +235,12 @@
       text-decoration: underline;
     }
 
+    .link-count {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
     /* Modal */
     .modal-overlay {
       position: fixed;
@@ -351,6 +357,37 @@
       font-size: 1rem;
       line-height: 1.7;
       white-space: pre-wrap;
+    }
+
+    .modal-links {
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .modal-links-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.75rem;
+    }
+
+    .modal-links ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .modal-links a {
+      color: var(--accent);
+      font-size: 0.9rem;
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .modal-links a:hover {
+      text-decoration: underline;
     }
 
     .modal-footer {
@@ -556,6 +593,7 @@
       <div class="modal-body">
         <h2 class="modal-title" id="modalTitle"></h2>
         <div class="modal-content" id="modalContent"></div>
+        <div class="modal-links" id="modalLinks" style="display: none;"></div>
       </div>
       <div class="modal-footer">
         <a class="linkedin-btn" id="modalLink" href="#" target="_blank">
@@ -707,6 +745,17 @@
         body = quoteLines.slice(1).join('\n').trim();
       }
 
+      // Parse the "## Links" section into a list of URLs.
+      const links = [];
+      const linksMatch = content.match(/##\s*Links\s*\n([\s\S]*)/);
+      if (linksMatch) {
+        const linkRe = /^-\s+(\S.*)$/gm;
+        let m;
+        while ((m = linkRe.exec(linksMatch[1])) !== null) {
+          links.push(m[1].trim());
+        }
+      }
+
       if (!title && !body) return null;
 
       return {
@@ -717,7 +766,8 @@
         postLink,
         authorName: authorName || 'Unknown',
         authorImage: authorImage || '',
-        body
+        body,
+        links
       };
     }
 
@@ -743,6 +793,7 @@
           <h3 class="post-title">${escapeHtml(post.title)}</h3>
           <p class="post-preview">${escapeHtml(post.body.substring(0, 200))}${post.body.length > 200 ? '...' : ''}</p>
           <div class="post-footer">
+            ${post.links && post.links.length ? `<span class="link-count">🔗 ${post.links.length} link${post.links.length > 1 ? 's' : ''}</span>` : '<span></span>'}
             <span class="view-link">Read more →</span>
           </div>
         </div>
@@ -771,7 +822,20 @@
       document.getElementById('modalTitle').textContent = post.title;
       document.getElementById('modalContent').textContent = post.body;
       document.getElementById('modalLink').href = post.postLink || '#';
-      
+
+      const modalLinks = document.getElementById('modalLinks');
+      const links = post.links || [];
+      if (links.length) {
+        modalLinks.innerHTML = '<h4 class="modal-links-title">Links</h4><ul>' +
+          links.map(url =>
+            `<li><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a></li>`
+          ).join('') + '</ul>';
+        modalLinks.style.display = 'block';
+      } else {
+        modalLinks.innerHTML = '';
+        modalLinks.style.display = 'none';
+      }
+
       modalOverlay.classList.add('active');
       document.body.style.overflow = 'hidden';
     }
