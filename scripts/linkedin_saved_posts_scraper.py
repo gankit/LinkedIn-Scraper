@@ -257,12 +257,9 @@ Author URL: {post['author_url']}
 Post Created At: {post_created}
 Post Link: {post['url']}
 
-<aside>
-<img src="{post['author_image']}" alt="{post['author']}" width="40px" /> **[{post['author']}]({post['author_url']})**
-
-{post['body'] if post['body'] else "*No text content available*"}
-
-</aside>
+> ![{post['author']}]({post['author_image']}) **[{post['author']}]({post['author_url']})**
+>
+> {post['body'].replace(chr(10), chr(10) + "> ") if post['body'] else "*No text content available*"}
 """
         
         filepath.write_text(md_content, encoding='utf-8')

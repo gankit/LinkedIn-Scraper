@@ -684,22 +684,27 @@
       const postLinkMatch = content.match(/Post Link:\s*(.+)/);
       if (postLinkMatch) postLink = postLinkMatch[1].trim();
 
-      // Parse aside block for author info
-      const asideMatch = content.match(/<aside>([\s\S]*?)<\/aside>/);
-      if (asideMatch) {
-        const asideContent = asideMatch[1];
-        
-        // Extract author image
-        const imgMatch = asideContent.match(/src="([^"]+)"/);
+      // Parse blockquote for author info and post body.
+      // Format: lines prefixed with "> ", the first holding the author
+      // image + name, the rest holding the post body.
+      const quoteLines = content
+        .split('\n')
+        .filter(line => line.startsWith('>'))
+        .map(line => line.replace(/^>\s?/, ''));
+
+      if (quoteLines.length) {
+        const header = quoteLines[0];
+
+        // Extract author image from the markdown image: ![alt](src)
+        const imgMatch = header.match(/!\[[^\]]*\]\(([^)]+)\)/);
         if (imgMatch) authorImage = imgMatch[1];
 
-        // Extract author name
-        const nameMatch = asideContent.match(/\*\*\[([^\]]+)\]/);
+        // Extract author name from the bold link: **[name](url)**
+        const nameMatch = header.match(/\*\*\[([^\]]+)\]/);
         if (nameMatch) authorName = nameMatch[1];
 
-        // Extract body - everything after the author link line
-        const bodyMatch = asideContent.match(/\*\*\[.+?\]$$.+?$$\*\*\s*([\s\S]*)/);
-        if (bodyMatch) body = bodyMatch[1].trim();
+        // Body is everything after the header line (skip the blank divider).
+        body = quoteLines.slice(1).join('\n').trim();
       }
 
       if (!title && !body) return null;
